@@ -175,4 +175,42 @@ The single thread forming the spine of Node's event loop is V8's event loop. Whe
 I/O operations are initiated within this loop they are delegated to **libuv**, which
 manages the request using its own (multi-threaded, asynchronous) environment.
 **libuv** announces the completion of I/O operations, allowing any callbacks waiting
-on this event to be re-introduced to the main V8 thread for execution:
+on this event to be re-introduced to the main V8 thread for execution.
+
+A Node process begins by constructing a single execution stack, with the global
+context forming the base of the stack. Functions on this stack execute within their
+own, local, context (sometimes referred to as scope), which remains enclosed within
+the global context (which you'll hear referred to as closure). **Because Node is evented,
+any given execution context can commit the running thread to handling an eventual
+execution context. This is the purpose of callback functions**
+
+---
+
+---
+
+# The Read-Eval-Print Loop and executing a Node program
+
+Node's **REPL (Read-Eval-Print-Loop)** represents the Node shell. To enter the shell
+prompt, enter Node via your terminal without passing a filename:
+
+> node
+
+You now have access to a running Node process, and may pass JavaScript
+commands to this process. For example, after entering 2+2 the shell would send 4 to
+stdout. Node's REPL is an excellent place to try out, debug, test, or otherwise play
+with JavaScript code.
+
+Because the REPL is a native object, programs can also use instances as a context in
+which to run JavaScript interactively. For example, here we create our own custom
+function sayHello, add it to the context of a REPL instance, and start the REPL,
+emulating a Node shell prompt:
+
+> require('repl').start("> ").context.sayHello = function() {
+
+> return "Hello"
+
+> };
+
+Entering sayHello() at the prompt will result in Hello being sent to stdout.
+Let's take everything we've learned in this chapter and create an interactive REPL
+which allows us to execute JavaScript on a remote server.
