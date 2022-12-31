@@ -2,6 +2,8 @@
 
 This book is for developers who want to build high-capacity network applications, such as social networks, collaborative document editing environments, using a language you already know.
 
+# 1.
+
 # Extending JavaScript
 
 The general principle is, operations must never block. Node's desire for speed
@@ -214,3 +216,120 @@ emulating a Node shell prompt:
 Entering sayHello() at the prompt will result in Hello being sent to stdout.
 Let's take everything we've learned in this chapter and create an interactive REPL
 which allows us to execute JavaScript on a remote server.
+
+---
+
+---
+
+---
+
+---
+
+---
+
+---
+
+# 2.
+
+# Understanding Asynchronous Event-Driven Programming
+
+Eliminating blocking processes through the use of event-driven, asynchronous I/O
+is Node's primary organizational principle. We've learned how this design helps
+developers in shaping information and adding capacity: lightweight, independent,
+and share-nothing processes communicating through callbacks synchronized within
+a predictable event loop.
+
+Accompanying the growth in the popularity of Node is a growth in the number
+of well-designed evented systems and applications. For a new technology to be
+successful, it must eliminate existing problems and/or offer to consumers a better
+solution at a lower cost in terms of time or effort or price. In its short and fertile
+lifespan, the Node community has collaboratively proven that this new development
+model is a viable alternative to existing technologies. The number and quality of
+Node-based solutions powering enterprise-level applications provide further proof
+that these new ideas are not only novel, but preferred.
+
+## Broadcasting eventsIt is always good to have an accurate understanding of the total eventual cost of
+
+asking for a service to be performed.
+I/O is expensive. In the following chart (taken from Ryan Dahl's original presentation
+on Node) we can see how many clock cycles typical system tasks consume. The
+relative cost of I/O operations is striking.
+
+L1 - cache3 cycles
+
+L2 - cache14 cycles
+
+RAM250 - cycles
+
+Disk - 41,000,000 cycles
+
+Network - 240,000,000 cycles
+
+The reasons are clear enough: a disk is a physical device, a spinning metal platter
+that buses data at a speed that cannot possibly match the speed of an on-chip or
+near-chip cache moving data between the CPU and RAM (Random Access Memory).
+Similarly, a network is bound by the speed in which data can travel through its
+connecting "wires", modulated by its controllers. Even through fiber optic cables,
+light itself needs 0.1344 seconds to travel around the world. In a network used by
+billions of people regularly interacting across great distances, this sort of latency
+builds up.
+
+In the traditional marketplace described by an application running on a blocking
+system the purchase of a file operation requires a significant expenditure of resources,
+as we can see in the preceding table. Primarily this is due to scarcity: a fixed number
+of processes, or "units of labor" are available, each able to handle only a single task,
+and as the availability of labor decreases, its cost (to the client) increases.
+
+The breakthrough in thinking reflected by Node's design is simple to understand
+once one recognizes that most worker threads spend their time waiting—for more
+instructions, a sub-task to complete, and so on. For example, a process assigned
+to service the command format my hard drive will dedicate all of its allotted resources
+to managing a workflow something like the following:
+
+- Communicate to a device driver that a format request has been made
+- Idle, waiting for an "unknowable" length of time
+- Receive the signal format is complete
+- Notify the client
+- Clean up; shut down
+
+In the preceding figure we see that an expensive worker is charging the client a
+fixed fee per unit of time regardless of whether any useful work is being done (the
+client is paying equally for activity and idleness). Or to put it another way, it is not
+necessarily true, and most often simply not true, that the sub-tasks comprising a total
+task each require identical effort or expertise, and therefore it is wasteful to pay a
+premium price for such cheap labor
+
+Sympathetically, we must also recognize that this worker can do no better even if
+ready and able to handle more work—even the best intentioned worker cannot do
+anything about I/O bottlenecks. The worker here is **I/O bound.**
+
+A **blocking** process is therefore better understood as an **idle** process, and **idle**
+processes are **bottlenecks** within the particular task and for the overall application
+flow. What if multiple clients could share the same worker, such that the moment a
+worker announces availability due to an I/O bottleneck, another job from another
+client could be started?
+
+Node has commoditized I/O through the introduction of an environment
+where system resources are (ideally) never idle. Event-driven programming as
+implemented by Node reflects the simple goal of lowering overall system costs
+by encouraging the sharing of expensive labor, mainly by reducing the number of
+I/O bottlenecks to zero. We no longer have a powerless chunk of rigidly-priced
+unsophisticated labor; we can reduce all effort into discrete units with precisely
+delineated shapes and therefore admit much more accurate pricing. Identical outlays
+of capital can fund a much larger number of completed transactions, increasing the
+efficiency of the market and the potential of the market in terms of new products and
+new product categories. Many more concurrent transactions can be handled on the
+same infrastructure, at the same cost.
+
+If the start, stop, and idle states of a process are understood as being events that can be
+subscribed to and acted upon we can begin to discuss how extremely complex systems
+can be constructed within this new, and at heart quite simple to grasp, model.
+
+What would an environment within which many client jobs are cooperatively
+scheduled look like? And how is this message passing between events handled?
+
+## Collaboration
+
+The worker flow described in the previous section is an example of a blocking server.
+Each worker is assigned a task or process, with each process able to accept only one
+request for work. They'll be blocking other requests, even if idling:
