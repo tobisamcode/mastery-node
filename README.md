@@ -35,7 +35,7 @@ allowing complex programs to be assembled out of smaller and simpler components.
 
 ---
 
-# Events
+## Events
 
 Many of the JavaScript extensions in Node emit events. These events are instances
 of events.EventEmitter. Any object can extend EventEmitter, providing
@@ -93,7 +93,7 @@ readable.pipe(process.stdout);
 
 ---
 
-# Rule of Modularity
+## Rule of Modularity
 
 This idea of building complex systems out of small pieces, loosely joined is seen
 in the management theory, theories of government, physical manufacturing, and
@@ -133,7 +133,7 @@ The design choices of this system, both social and
 technical, have done much to help make JavaScript a viable professional option
 for systems programming.
 
-# The Network
+## The Network
 
 I/O in the browser is mercilessly hobbled, for very good reasons—if the JavaScript
 on any given website could access your filesystem, or open up network connections
@@ -151,7 +151,7 @@ moving well beyond the somewhat dated **AJAX (Asynchronous JavaScript And Xml)**
 
 ---
 
-# v8 (machine powering Node's core)
+## v8 (machine powering Node's core)
 
 V8 is Google's JavaScript engine, written in C++. It compiles and executes JavaScript
 code inside of a **VM (Virtual Machine)**. When a webpage loaded into Google
@@ -166,7 +166,7 @@ the V8 environment, especially as your application grows in size.
 
 ---
 
-# The process object
+## The process object
 
 By now it should be clear as to how Node is structured, in terms of V8, the event
 loop, and so forth. We are now going to discuss, in detail, how instructions that you
@@ -335,3 +335,125 @@ Each worker is assigned a task or process, with each process able to accept only
 request for work. They'll be blocking other requests, even if idling:
 
 ![picture](https://github.com/tobisamcode/mastery-node/blob/main/assets/Screenshot%20from%202023-01-01%2016-23-34.png)
+
+One drawback to this method is the amount of scheduling and worker surveillance
+that needs to be done. The dispatcher must field a continuous stream of requests,
+while managing messages coming from workers about their availability, neatly
+breaking up requests into manageable tasks and efficiently sorting them such that
+the fewest number of workers are idling.
+
+Perhaps most importantly, what happens when all workers are fully booked? Does
+the dispatcher begin to drop requests from clients? Dispatching is resource-intensive
+as well, and there are limits even to the dispatcher's resources. If requests continue
+to arrive and no worker is available to service them what does the dispatcher do?
+Manage a queue? We now have a situation where the dispatcher is no longer doing
+the right job (dispatching), and has become responsible for bookkeeping and keeping
+lists, further diminishing operational efficiency.
+
+## Queueing
+
+In order to avoid overwhelming anyone, we might add a buffer between the clients
+and the dispatcher.
+
+This new worker is responsible for managing customer relations. Instead of speaking
+directly with the dispatcher, the client speaks to the services manager, passing the
+manager requests, and at some point in the future getting a call that their task has
+been completed. Requests for work are added to a prioritized work queue (a stack
+of orders with the most important one on top), and this manager waits for another
+client to walk through the door. The following figure describes the situations:
+
+![picture](https://github.com/tobisamcode/mastery-node/blob/main/assets/Screenshot%20from%202023-01-01%2016-26-59.png)
+
+When a worker is idle the dispatcher can fetch the first item on the stack, pass
+along any package workers have completed, and generally maintain a sane work
+environment where nothing gets dropped or lost. If it comes to a point where all the
+workers are idle and the task queue is empty, the office can sleep for a while, until
+the next client arrives.
+
+![picture](https://github.com/tobisamcode/mastery-node/blob/main/assets/Screenshot%20from%202023-01-01%2016-28-11.png)
+
+When a worker is idle the dispatcher can fetch the first item on the stack, pass
+along any package workers have completed, and generally maintain a sane work
+environment where nothing gets dropped or lost. If it comes to a point where all the
+workers are idle and the task queue is empty, the office can sleep for a while, until
+the next client arrives.
+
+This last model inspires Node's design. The primary modification is to occupy the
+workers' pool solely with I/O tasks and delegate the remaining work to the single
+thread of V8. If a JavaScript program is understood as the client, Node is the services
+manager running through the provided instructions and prioritizing them. When
+a potentially blocking task is encountered (I/O, timers, and streams) it is handed
+over to the dispatcher (the libuv thread pool). Otherwise, the instruction is queued
+up for the event loop to pop and execute.
+
+## Understanding the event loop
+
+Node processes JavaScript instructions using a **single thread**. Within your JavaScript
+program no two operations will ever execute at exactly the same moment, as might
+happen in a **multithreaded** environment. Understanding this fact is essential to
+understanding how a Node program, or process, is designed and runs.
+
+This does not mean that only one thread is being used on the machine hosting this
+a Node process. Simply writing a callback does not magically create parallelism!
+Recall Chapter 1, Understanding the Node Environment, and our discussion about the
+process object—Node's "single thread" simplicity is in fact an abstraction created for
+the benefit of developers. It is nevertheless crucial to remember that there are many
+threads running in the background managing I/O (and other things), and these
+threads unpredictably insert instructions, originally packaged as callbacks, into the
+single JavaScript thread for processing.
+
+Node executes instructions one by one until there are no further instructions
+to execute, no more input or output to stream, and no further callbacks waiting
+to be handled.
+
+Even deferred events (such as timeouts) require an eventual interrupt in the event
+loop to fulfill their promise.
+
+For example, the following while loop will never terminate:
+
+```js
+var stop = false;
+setTimeout(function () {
+  stop = true;
+}, 1000);
+while (stop === false) {}
+```
+
+Even though one might expect, in approximately one second, the assignment of
+a Boolean true to the variable stop, tripping the while conditional and interrupting
+its loop, this will never happen. Why? This while loop starves the event loop by running
+infinitely, greedily checking and rechecking a value that is never given a chance
+to change, as the event loop is never given a chance to schedule our timer callback
+for execution.
+
+As such, programming Node implies programming the event loop. We've previously
+discussed the event sources that are queued and otherwise arranged and ordered on
+this event loop—I/O events, timer events, and so on.
+
+When writing non-deterministic code it is imperative that no assumptions about
+eventual callback orders are made. The abstraction that is Node masks the
+complexity of the thread pool on which the straightforward main JavaScript thread
+floats, leading to some surprising results.
+
+We will now refine this general understanding with more information about how,
+precisely, the callback execution order for each of these types is determined within
+Node's event loop.
+
+## Four sources of truth
+
+- **Execution blocks**: The blocks of JavaScript code comprising the Node
+  program, being expressions, loops, functions, and so on. This includes
+  EventEmitter events emitted within the current execution context.
+
+- **Timers**: Callbacks deferred to sometime in the future specified in
+  milliseconds, such as setTimeout and setInterval.
+
+- **I/O**: Prepared callbacks returned to the main thread after being delegated to
+  Node's managed thread pool, such as filesystem calls and network listeners.
+
+- **Deferred execution blocks**: Mainly the functions slotted on the stack
+  according to the rules of setImmediate and nextTick.
+
+We have learned how the deferred execution method setImmediate slots its
+callbacks after I/O callbacks in the event queue, and nextTick slots its callbacks
+before I/O and timer callbacks.
