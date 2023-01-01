@@ -333,3 +333,5 @@ scheduled look like? And how is this message passing between events handled?
 The worker flow described in the previous section is an example of a blocking server.
 Each worker is assigned a task or process, with each process able to accept only one
 request for work. They'll be blocking other requests, even if idling:
+
+![picture](https://github.com/tobisamcode/mastery-node/blob/main/assets/Screenshot%20from%202023-01-01%2016-23-34.png)
